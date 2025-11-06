@@ -1,0 +1,60 @@
+name: PTA Parent Feedback (v1)
+version: 1
+fields:
+  # --- Header text fields ---
+  - key: parent_name
+    type: text
+    box: [0.10, 0.18, 0.45, 0.21] # <-- adjust
+    margin: 0.02
+
+  - key: ward_name
+    type: text
+    box: [0.55, 0.18, 0.90, 0.21] # <-- adjust
+    margin: 0.02
+
+  - key: contact_number
+    type: text
+    box: [0.10, 0.22, 0.45, 0.25] # <-- adjust
+    margin: 0.02
+
+  - key: department_year
+    type: text
+    box: [0.55, 0.22, 0.90, 0.25] # <-- adjust
+    margin: 0.02
+
+  # --- Likert questions (1..5) ---
+  # Each "boxes" list has 5 small rectangles left->right for options 1..5
+  - key: q1_teaching_learning_environment
+    type: rating
+    boxes:
+      - [0.15, 0.32, 0.18, 0.35] # 1
+      - [0.22, 0.32, 0.25, 0.35] # 2
+      - [0.29, 0.32, 0.32, 0.35] # 3
+      - [0.36, 0.32, 0.39, 0.35] # 4
+      - [0.43, 0.32, 0.46, 0.35] # 5
+
+  - key: q2_facilities_infrastructure
+    type: rating
+    boxes:
+      - [0.15, 0.36, 0.18, 0.39]
+      - [0.22, 0.36, 0.25, 0.39]
+      - [0.29, 0.36, 0.32, 0.39]
+      - [0.36, 0.36, 0.39, 0.39]
+      - [0.43, 0.36, 0.46, 0.39]
+
+  - key: q3_communication_with_parents
+    type: rating
+    boxes:
+      - [0.15, 0.40, 0.18, 0.43]
+      - [0.22, 0.40, 0.25, 0.43]
+      - [0.29, 0.40, 0.32, 0.43]
+      - [0.36, 0.40, 0.39, 0.43]
+      - [0.43, 0.40, 0.46, 0.43]
+
+  # Add more questions (q4..qN) the same way...
+
+  # --- Comments / suggestions (big text box) ---
+  - key: comments
+    type: paragraph
+    box: [0.10, 0.75, 0.90, 0.92] # <-- adjust to the comments area
+    margin: 0.01

@@ -1,0 +1,17 @@
+# Core API & server
+fastapi>=0.111
+uvicorn[standard]>=0.30
+
+# OCR: Google Vision + optional local fallback (Tesseract)
+google-cloud-vision>=3.7
+pytesseract>=0.3.10
+
+# Image processing
+opencv-python-headless>=4.10
+Pillow>=10.3
+numpy>=1.26
+
+# Data & config
+pydantic>=2.7,<3
+PyYAML>=6.0.2
+requests>=2.31

@@ -1,0 +1,45 @@
+form_type: pta_parent_feedback
+version: 2.0
+
+# These are just for OCR of text fields.
+fields:
+  - key: parent_name
+    type: text
+    # Top-left text line: "Parent Name"
+    box: [0.05, 0.865, 0.47, 0.895]
+
+  - key: contact_number
+    type: text
+    # "Contact No."
+    box: [0.53, 0.865, 0.95, 0.895]
+
+  - key: ward_name
+    type: text
+    # "Ward (Student) Name"
+    box: [0.05, 0.902, 0.47, 0.932]
+
+  - key: department_year
+    type: text
+    # "Department & Year"
+    box: [0.53, 0.902, 0.95, 0.932]
+
+  - key: comments
+    type: paragraph
+    # Big comments area near the bottom (adjusted tighter to avoid table text)
+    box: [0.08, 0.785, 0.92, 0.865]
+
+# Rating grid area on the right: we split this into 10 rows x 4 cols evenly.
+rating_grid:
+  # [x1, y1, x2, y2] normalized; tuned for your form
+  roi: [0.68, 0.26, 0.98, 0.78]
+  rows:
+    - Teaching Learning
+    - Monitoring Progress
+    - Faculty Involvement
+    - Infrastructure
+    - Learning Resources
+    - Study Environment
+    - Counselling & Placements
+    - Support Facilities
+    - Parental Perception
+    - Holistic Development
