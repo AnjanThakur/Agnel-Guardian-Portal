@@ -1,0 +1,17 @@
+@'
+# Secrets
+cloud-vision-key/
+*.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# App debug artifacts
+debug_out/
+
+# OS/editor misc
+.DS_Store
+Thumbs.db
+'@ | Out-File -Encoding UTF8 .gitignore
