@@ -2,7 +2,7 @@
 # Secrets
 cloud-vision-key/
 *.json
-
+remains/
 # Python
 .venv/
 __pycache__/
