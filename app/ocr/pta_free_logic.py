@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 import cv2
 import numpy as np
 
-from app.core.config import DEBUG_ROOT, bump_and_check_limit, get_usage
+from app.core.config import DEBUG_ROOT, bump_and_check_limit
 from app.core.logger import get_logger
 from app.models.constants import PTA_QUESTION_KEYS
 from app.models.schemas import OCRRequest
@@ -29,7 +29,7 @@ logger = get_logger("pta_free")
 
 
 # ---------------------------------------------------------------------------
-# Helper: comments extraction (text-only fallback)
+# Fallback comments extractor (text-only, no bbox)
 # ---------------------------------------------------------------------------
 def extract_comments_block(all_text: str) -> str:
     """
@@ -193,15 +193,13 @@ def _extract_ratings_from_table(
 
 
 # ---------------------------------------------------------------------------
-# NEW robust bbox-based text field extraction
+# Robust bbox-based text field extraction
 # ---------------------------------------------------------------------------
 def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
     Robust bbox-based extraction.
-    PRIMARY GOAL (this phase): comments must be correct.
+    PRIMARY GOAL: comments must be correct (even if long).
     """
-
-    import re
 
     if not lines:
         return {
@@ -214,56 +212,42 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
             "comments": {"value": "", "confidence": 0.0, "source": "pta-text"},
         }
 
-    # ✅ ALWAYS define this once
     all_text = "\n".join(ln.get("text", "") for ln in lines)
 
-    # ------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------
+    # ---------------- helpers ----------------
     def y_center(ln):
         _, y1, _, y2 = ln.get("box", [0, 0, 0, 0])
         return (y1 + y2) / 2
 
-    def looks_like_label(txt: str) -> bool:
-        low = txt.lower()
+    def is_printed_text(text: str) -> bool:
+        letters = [c for c in text if c.isalpha()]
+        if not letters:
+            return True
+        lower_ratio = sum(c.islower() for c in letters) / len(letters)
+        return lower_ratio < 0.15  # ONLY rule
+
+    def looks_like_label(text: str) -> bool:
+        low = text.lower()
         return any(k in low for k in [
             "name", "contact", "ward", "department", "graduation",
-            "parent", "signature", "sr.no", "details",
-            "criterion", "excellent", "unsatisfactory",
-            "fair", "good", "placements", "support facilities"
+            "parent", "signature", "please make", "suggestions",
+            "student overall", "strengthen"
         ])
 
-    def looks_like_info_value(txt: str) -> bool:
-        t = txt.strip().lower()
+    def looks_like_info_value(text: str) -> bool:
+        t = text.lower().strip()
+        return (
+            ":" in text
+            or re.fullmatch(r"\d{8,12}", t)
+            or re.search(r"(b|m)[-\s]?tech|\d{4}", t)
+            or re.search(r"\bcomp[-\s]?[a-z]\b", t)
+        )
 
-        # phone
-        if re.fullmatch(r"\d{8,12}", t):
-            return True
-
-        # dept / class codes
-        if re.search(r"\b(comp|it|extc|mech)[-\s]?[a-z0-9]?\b", t):
-            return True
-
-        # degree + year
-        if re.search(r"(b|m)[-\s]?tech|\d{4}", t):
-            return True
-
-        # short dashed tokens like Comp-A
-        if len(t) <= 10 and "-" in t:
-            return True
-
-        return False
-
-    # ------------------------------------------------------------
-    # PAGE GEOMETRY
-    # ------------------------------------------------------------
+    # ---------------- geometry ----------------
     ys = [y_center(ln) for ln in lines]
     page_top, page_bottom = min(ys), max(ys)
     page_height = max(1.0, page_bottom - page_top)
 
-    # ------------------------------------------------------------
-    # FIND COMMENT BAND
-    # ------------------------------------------------------------
     comments_label_bottom = None
     info_block_top = None
 
@@ -280,7 +264,6 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
         ]):
             info_block_top = y1 if info_block_top is None else min(info_block_top, y1)
 
-    # Fallback geometry
     if comments_label_bottom is None:
         comments_label_bottom = page_top + 0.55 * page_height
 
@@ -290,45 +273,8 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
     comment_y1 = comments_label_bottom + 8
     comment_y2 = info_block_top - 8
 
-    # ------------------------------------------------------------------
-    # 2) Collect comments using STRICT bbox + handwriting heuristics
-    # ------------------------------------------------------------------
-    comment_lines: List[str] = []
-
-    def is_printed_text(text: str) -> bool:
-        # Printed text is usually ALL CAPS or has no lowercase letters
-        letters = [c for c in text if c.isalpha()]
-        if not letters:
-            return True
-        lower_ratio = sum(c.islower() for c in letters) / len(letters)
-        return lower_ratio < 0.15  # mostly uppercase → printed
-
-    def looks_like_info_value(text: str) -> bool:
-        t = text.lower().strip()
-        return (
-            ":" in text
-            or re.fullmatch(r"\d{8,12}", t)                       # phone
-            or re.search(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", t) # date
-            or re.search(r"\b(b|m)[-\s]?tech\b", t)
-            or re.search(r"\bcomp[-\s]?[a-z]\b", t)
-        )
-
-    def looks_like_label(text: str) -> bool:
-        low = text.lower()
-        return any(
-            k in low for k in [
-                "name",
-                "contact",
-                "ward",
-                "department",
-                "graduation",
-                "signature",
-                "student overall",
-                "please make",
-                "suggestions",
-                "strengthen",
-            ]
-        )
+    # ---------------- collect comments ----------------
+    comment_items = []
 
     for ln in lines:
         yc = y_center(ln)
@@ -341,28 +287,50 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
 
         if looks_like_label(text):
             continue
-
         if looks_like_info_value(text):
             continue
-
         if is_printed_text(text):
             continue
-
-        if len(text) < 4:
+        if len(text) < 3:
             continue
 
-        comment_lines.append(text)
+        x1, y1, x2, y2 = ln["box"]
+        comment_items.append({
+            "text": text,
+            "y": yc,
+            "x": x1,
+            "h": max(1, y2 - y1)
+        })
 
-    comments = "\n".join(comment_lines).strip()
+    # ---------------- ordering ----------------
+    comments = ""
+    if comment_items:
+        comment_items.sort(key=lambda c: c["y"])
 
+        ordered = []
+        row = []
+        mean_h = np.mean([c["h"] for c in comment_items])
+        row_threshold = max(8, 0.6 * mean_h)
 
-    # ✅ FINAL SAFETY FALLBACK
+        for c in comment_items:
+            if not row or abs(c["y"] - row[-1]["y"]) <= row_threshold:
+                row.append(c)
+            else:
+                row.sort(key=lambda r: r["x"])
+                ordered.extend(r["text"] for r in row)
+                row = [c]
+
+        if row:
+            row.sort(key=lambda r: r["x"])
+            ordered.extend(r["text"] for r in row)
+
+        comments = "\n".join(ordered).strip()
+
+    # ---------------- fallback ----------------
     if not comments:
         comments = extract_comments_block(all_text)
 
-    # ------------------------------------------------------------
-    # INFO BLOCK (LOWER PAGE)
-    # ------------------------------------------------------------
+    # ---------------- info fields ----------------
     info_lines = [ln for ln in lines if y_center(ln) >= info_block_top - 5]
 
     def smart_find(pattern, ctx):
@@ -385,9 +353,7 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
     contact_number = smart_find(r"contact", info_lines)
     department_year = smart_find(r"depart|graduat|year", info_lines)
 
-    # ------------------------------------------------------------
-    # SIGNATURE DATE
-    # ------------------------------------------------------------
+    # ---------------- date ----------------
     date_re = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b")
     signature_date = ""
 
@@ -397,9 +363,6 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
             signature_date = m.group(0)
             break
 
-    # ------------------------------------------------------------
-    # FINAL OUTPUT
-    # ------------------------------------------------------------
     def conf(v): return 0.9 if v else 0.0
 
     return {
@@ -411,8 +374,6 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
         "signature_date": {"value": signature_date, "confidence": conf(signature_date), "source": "pta-text"},
         "comments": {"value": comments, "confidence": 0.85 if comments else 0.0, "source": "pta-text"},
     }
-
-
 
 # ---------------------------------------------------------------------------
 # Main entry point used by the FastAPI route
