@@ -8,7 +8,8 @@ from typing import Dict, Any, List
 
 import cv2
 import numpy as np
-
+from app.ocr.grammar_fix import grammar_fix
+from app.ocr.text_normalizer import normalize_ocr_text
 from app.core.config import DEBUG_ROOT, bump_and_check_limit
 from app.core.logger import get_logger
 from app.models.constants import PTA_QUESTION_KEYS
@@ -364,6 +365,8 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
             break
 
     def conf(v): return 0.9 if v else 0.0
+    normalized = normalize_ocr_text(comments)
+    fixed_comments = grammar_fix(normalized)
 
     return {
         "parent_name": {"value": parent_name, "confidence": conf(parent_name), "source": "pta-text"},
@@ -372,7 +375,7 @@ def _extract_text_fields(lines: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any
         "department_year": {"value": department_year, "confidence": conf(department_year), "source": "pta-text"},
         "parent_signature": {"value": "", "confidence": 0.0, "source": "pta-text"},
         "signature_date": {"value": signature_date, "confidence": conf(signature_date), "source": "pta-text"},
-        "comments": {"value": comments, "confidence": 0.85 if comments else 0.0, "source": "pta-text"},
+        "comments": {"value": fixed_comments,"confidence": 0.85 if fixed_comments else 0.0,"source": "pta-text",},
     }
 
 # ---------------------------------------------------------------------------
