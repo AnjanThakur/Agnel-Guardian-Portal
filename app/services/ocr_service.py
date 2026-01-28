@@ -7,7 +7,7 @@ from google.api_core.exceptions import ServiceUnavailable
 
 from PIL import Image
 
-from app.utils.preprocess import preprocess_page
+from app.utils.preprocess_table import preprocess_page
 from app.utils.text_tools import line_boxes_from_vision
 
 

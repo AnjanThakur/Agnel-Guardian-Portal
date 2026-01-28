@@ -4,7 +4,9 @@ from io import BytesIO
 from typing import Tuple
 
 from PIL import Image
-
+# app/utils/helpers.py
+import cv2
+import os
 
 def b64_to_bytes(b64: str) -> bytes:
     """
@@ -41,11 +43,13 @@ def ensure_dir(path: str) -> str:
     return str(p)
 
 
-# app/utils/helpers.py
-import cv2
-import os
+
 
 def save_debug_image(img, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if img is None:
+        return
+    if not hasattr(img, "size") or img.size == 0:
+        return
     cv2.imwrite(path, img)
+
 
