@@ -3,8 +3,8 @@ from pathlib import Path
 import re
 
 # ---------------- CONFIG ----------------
-DEBUG_ROOT = Path("app/debug_out/2025-12-27_00-07-40_pta_free")          # <-- change if needed
-OUTPUT_DIR = Path("app/pta_dataset/all_rows/pdf 3")  # temp holding folder
+DEBUG_ROOT = Path("app/debug_out/2026-01-31_15-32-05_pta_free")          # <-- change if needed
+OUTPUT_DIR = Path("app/pta_dataset/all_rows/pdf 4")  # temp holding folder
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 # ----------------------------------------
 
