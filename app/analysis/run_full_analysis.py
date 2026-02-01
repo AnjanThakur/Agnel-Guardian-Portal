@@ -8,6 +8,10 @@ from app.analysis.summary_writer import generate_paragraph_summary
 from app.analysis.visualize import plot_sentiment, plot_keywords, plot_topics
 from app.analysis.pdf_report import export_feedback_report_pdf
 
+def run_full_feedback_analysis(comments, report_dir):
+    print("ANALYSIS INPUT:", repr(comments))
+    print("TEXT LENGTH:", len(comments[0]) if comments and comments[0] else 0)
+
 def _is_junk(s: str) -> bool:
     if not s:
         return True
