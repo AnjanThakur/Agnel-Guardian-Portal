@@ -68,7 +68,7 @@ export function FileUpload({ onFilesSelected }) {
                         Drop files here
                     </p>
                     <p className="text-sm text-muted-foreground">
-                        PDFs or Images (Batch Supported)
+                        PDFs or Images
                     </p>
                 </div>
             </div>

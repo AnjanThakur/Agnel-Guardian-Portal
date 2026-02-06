@@ -80,6 +80,79 @@ function CommentSection({ text }) {
     )
 }
 
+function OtherDetailsSection({ details }) {
+    if (!details || (Object.keys(details).length === 0 && !details.raw_text)) return null
+
+    const safeDetails = details || {}
+    const raw = safeDetails.raw_text || ""
+
+    // Helper to extract if missing
+    const extract = (regex) => {
+        const match = raw.match(regex)
+        return match ? match[1].trim() : null
+    }
+
+    const parentName = safeDetails.parent_name || extract(/Name:\s*([^\n]+)/i)
+    const email = safeDetails.email || extract(/Email:\s*([^\n]+)/i)
+    const phone = safeDetails.phone || extract(/Contact number:\s*([^\n]+)/i)
+    const wardName = safeDetails.ward_name || extract(/Ward's name:\s*([^\n]+)/i)
+    const department = safeDetails.department || extract(/Department[^:]*:\s*([^\n]+)/i)
+
+    const hasData = parentName || email || phone || wardName || department
+
+    // If completely empty (no parsed fields AND no raw_text), hide it.
+    if (!hasData && !raw) return null
+
+    return (
+        <div className="mt-6 pt-6 border-t border-border/60">
+            <h4 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                <FileText className="w-4 h-4" /> Other Details
+            </h4>
+            <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-xl text-sm font-serif leading-relaxed text-slate-700 space-y-2">
+                {parentName && (
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-500 w-32 shrink-0">Parent Name:</span>
+                        <span className="text-foreground">{parentName}</span>
+                    </div>
+                )}
+                {email && (
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-500 w-32 shrink-0">Email:</span>
+                        <span className="text-primary hover:underline cursor-pointer">{email}</span>
+                    </div>
+                )}
+                {phone && (
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-500 w-32 shrink-0">Phone:</span>
+                        <span className="font-mono text-foreground">{phone}</span>
+                    </div>
+                )}
+                {wardName && (
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-500 w-32 shrink-0">Ward's Name:</span>
+                        <span className="text-foreground">{wardName}</span>
+                    </div>
+                )}
+                {department && (
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-500 w-32 shrink-0">Department:</span>
+                        <span className="text-foreground">{department}</span>
+                    </div>
+                )}
+
+
+                {/* Fallback Display of Raw Text */}
+                {(!hasData && raw) && (
+                    <div className="text-slate-500 italic mt-2 text-xs">
+                        <strong className="block mb-1 text-slate-400 uppercase tracking-wider text-[10px]">Reference Text:</strong>
+                        <div className="whitespace-pre-wrap">{raw}</div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
 
 export function ResultsDisplay({ data, previewUrl, rawText }) {
     const [showRaw, setShowRaw] = useState(false)
@@ -93,6 +166,7 @@ export function ResultsDisplay({ data, previewUrl, rawText }) {
 
     const ratings = data.ratings || {}
     const comments = data.comments || ""
+    const other_details = data.other_details || {}
     const usage = data.usage || {}
 
     // If we don't have 'ratings' key, maybe it's the old flat structure?
@@ -113,10 +187,10 @@ export function ResultsDisplay({ data, previewUrl, rawText }) {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
 
             {/* 1. Overview Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
 
                 {/* LEFT: Preview Image */}
-                <div className="space-y-3">
+                <div className="space-y-3 sticky top-24">
                     <h3 className="text-lg font-serif font-semibold text-foreground flex items-center gap-2">
                         <ImageIcon className="w-4 h-4 text-accent" /> Document Source
                     </h3>
@@ -125,7 +199,7 @@ export function ResultsDisplay({ data, previewUrl, rawText }) {
                             <img
                                 src={previewUrl}
                                 alt="Document Preview"
-                                className="w-full h-auto object-cover max-h-[500px] transition-transform duration-700 group-hover:scale-[1.02]"
+                                className="w-full h-auto object-cover max-h-[calc(100vh-200px)] transition-transform duration-700 group-hover:scale-[1.02]"
                             />
                         ) : (
                             <div className="h-64 flex items-center justify-center text-muted-foreground bg-slate-50">
@@ -197,33 +271,16 @@ export function ResultsDisplay({ data, previewUrl, rawText }) {
 
                                     {/* Comments */}
                                     <CommentSection text={comments} />
+
+                                    {/* Other Details */}
+                                    <OtherDetailsSection details={other_details} />
+
+
                                 </div>
                             )}
                         </CardContent>
                     </Card>
                 </div>
-            </div>
-
-            {/* Raw Data Accordion */}
-            <div className="pt-8 border-t border-border/40">
-                <button
-                    onClick={() => setShowRaw(!showRaw)}
-                    className="group flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                >
-                    <div className="p-1 rounded bg-slate-100 group-hover:bg-slate-200 transition-colors">
-                        <ChevronRight className={cn("w-4 h-4 transition-transform duration-300", showRaw && "rotate-90")} />
-                    </div>
-                    <span>View Raw System Output</span>
-                </button>
-
-                {showRaw && (
-                    <div className="mt-4 p-6 rounded-lg bg-slate-50 border border-border/50 animate-in slide-in-from-top-4">
-                        <p className="text-xs font-mono text-muted-foreground mb-2">RAW_TEXT_ANNOTATION (Google Vision):</p>
-                        <pre className="whitespace-pre-wrap text-xs text-slate-600 font-mono leading-relaxed max-h-[300px] overflow-auto">
-                            {data.raw_text || rawText || "No raw text available."}
-                        </pre>
-                    </div>
-                )}
             </div>
         </div>
     )

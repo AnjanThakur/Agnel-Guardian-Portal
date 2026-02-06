@@ -6,7 +6,9 @@ from pydantic import BaseModel
 class OCRRequest(BaseModel):
     imageBase64: str
     template: str | None = None
-    saveDebug: bool = False   # ← NEW FIELD
+    saveDebug: bool = False
+    department: str = "General"
+    class_name: str = "Unknown"
 
 
 

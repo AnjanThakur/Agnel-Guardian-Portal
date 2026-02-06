@@ -23,6 +23,7 @@ from app.services.google_vision import document_text_from_bytes, vision_response
 from app.utils.helpers import ensure_dir, save_debug_image
 
 from app.analysis.run_full_analysis import run_full_feedback_analysis
+from app.services.feedback_ingest import save_feedback_form
 
 logger = get_logger("pta_free")
 
@@ -42,13 +43,15 @@ def _debug_dir_for_request() -> str:
 
 
 # ============================================================
-# COMMENT EXTRACTION
+# COMMENT EXTRACTION & PARSING
 # ============================================================
-def extract_comments_only(
+import re
+
+def extract_comments_and_details(
     page_bgr: np.ndarray,
     table_bottom_y: int,
     debug_dir: str | None = None,
-) -> str:
+) -> Tuple[str, Dict[str, str]]:
     h, w = page_bgr.shape[:2]
 
     x1 = int(0.03 * w)
@@ -57,11 +60,11 @@ def extract_comments_only(
     y2 = int(0.92 * h)
 
     if y2 <= y1:
-        return ""
+        return "", {}
 
     crop = page_bgr[y1:y2, x1:x2]
     if crop is None or crop.size == 0:
-        return ""
+        return "", {}
 
     if debug_dir:
         save_debug_image(crop, f"{debug_dir}/comment_crop.png")
@@ -73,13 +76,51 @@ def extract_comments_only(
     if resp and resp.full_text_annotation:
         raw = resp.full_text_annotation.text or ""
 
-    return _clean_comment_text(raw)
+    return _parse_raw_comment_text(raw)
 
 
-def _clean_comment_text(text: str) -> str:
+def _parse_raw_comment_text(text: str) -> Tuple[str, Dict[str, str]]:
     if not text:
-        return ""
+        return "", {}
 
+    # Keywords specified by user:
+    # "Name, Contact number, Ward's name, Department and year of graduation, Parent's signature and date"
+    # We split at the FIRST occurrence of any of these concepts.
+    split_markers = [
+        "name:", 
+        "name of parent",
+        "contact number", 
+        "contact no",
+        "mobile", 
+        "phone",
+        "ward's name", 
+        "ward name",
+        "department", 
+        "year of graduation",
+        "signature", 
+        "parent's signature",
+        "date:"
+    ]
+
+    text_lower = text.lower()
+    min_idx = len(text)
+    
+    found_split = False
+    for m in split_markers:
+        idx = text_lower.find(m)
+        if idx != -1 and idx < min_idx:
+            # Basic validation: ensure it's not part of a word like "filename" (mostly ok due to spaces in OCR)
+            min_idx = idx
+            found_split = True
+    
+    comments_part = text
+    details_part = ""
+
+    if found_split:
+        comments_part = text[:min_idx]
+        details_part = text[min_idx:]
+
+    # Clean the comments part
     banned = [
         "please make any additional comments",
         "comments or suggestions",
@@ -87,17 +128,40 @@ def _clean_comment_text(text: str) -> str:
         "students overall holistic development",
         "parent feedback form",
     ]
-
-    out: List[str] = []
-    for ln in text.splitlines():
+    clean_lines = []
+    for ln in comments_part.splitlines():
         s = ln.strip()
-        if not s:
-            continue
-        if any(b in s.lower() for b in banned):
-            continue
-        out.append(s)
+        if not s: continue
+        if any(b in s.lower() for b in banned): continue
+        clean_lines.append(s)
+    clean_comments = "\n".join(clean_lines).strip()
 
-    return "\n".join(out).strip()
+    # Process details part
+    details = {}
+    if details_part:
+        details["raw_text"] = details_part.strip()
+        
+        # Simple extraction for specific fields (best effort)
+        # Email
+        email_match = re.search(r'[\w.-]+@[\w.-]+\.\w+', details_part)
+        if email_match:
+            details["email"] = email_match.group(0)
+            
+        # Phone (Look for digits)
+        phone_match = re.search(r'(?:mobile|phone|contact).*?(\d[\d -]{8,15})', details_part, re.IGNORECASE)
+        if phone_match:
+             details["phone"] = phone_match.group(1).strip()
+        else:
+             # Fallback regex for just numbers
+             ph = re.search(r'(\d{10})', details_part)
+             if ph: details["phone"] = ph.group(1)
+
+        # Parent Name (Heuristic: "Name: <val>")
+        name_match = re.search(r'Name\s*:\s*([^:\n]+)', details_part, re.IGNORECASE)
+        if name_match:
+             details["parent_name"] = name_match.group(1).strip()
+
+    return clean_comments, details
 
 
 # ============================================================
@@ -127,8 +191,10 @@ def _process_single_page(img_bgr: np.ndarray, debug_dir: str) -> Dict[str, Any]:
     _, _, _, table_bottom = detect_table_region(pre_gray)
 
     comments = ""
+    other_details = {}
+
     if not DATASET_MODE:
-        comments = extract_comments_only(
+        comments, other_details = extract_comments_and_details(
             page_bgr=img_bgr,
             table_bottom_y=table_bottom,
             debug_dir=debug_dir,
@@ -153,6 +219,7 @@ def _process_single_page(img_bgr: np.ndarray, debug_dir: str) -> Dict[str, Any]:
     return {
         "ratings": ratings,
         "comments": comments,
+        "other_details": other_details,
     }
 
 
@@ -224,6 +291,33 @@ def run_pta_free(req: OCRRequest) -> Dict[str, Any]:
 
     page_dir = ensure_dir(f"{debug_root}/page_01")
     result = _process_single_page(img, page_dir)
+
+    # ===============================
+# STORE OCR DATA IN DB (NON-INTRUSIVE)
+# ===============================
+    try:
+        rating_results = []
+
+        # Convert ratings dict → list (order preserved)
+        for key in PTA_QUESTION_KEYS:
+            r = result["ratings"].get(key, {})
+            rating_results.append({
+                "value": r.get("value"),
+                "confidence": r.get("confidence", 0.0),
+                "status": r.get("status", "empty_or_noise"),
+            })
+
+        save_feedback_form(
+            form_id=f"PTA_{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{os.urandom(4).hex()}",
+            department=req.department,
+            class_name=req.class_name,
+            rating_results=rating_results,
+            comment_text=result.get("comments", "")
+        )
+
+    except Exception as e:
+        logger.error(f"[DB] Failed to store feedback: {e}")
+
 
     report = None
     if not DATASET_MODE and result.get("comments"):

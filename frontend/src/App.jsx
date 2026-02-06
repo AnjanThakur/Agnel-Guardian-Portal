@@ -6,7 +6,9 @@ import { Label } from '@/components/ui/label'
 import { FileUpload } from '@/components/FileUpload'
 import { ResultsDisplay } from '@/components/ResultsDisplay'
 import { SidebarList } from '@/components/SidebarList'
-import { Loader2, ChevronDown, GraduationCap, ShieldCheck, RefreshCw, Trash2 } from 'lucide-react'
+import { AISummaryReport } from '@/components/AISummaryReport'
+import { AnalyticsView } from '@/components/AnalyticsView'
+import { Loader2, ChevronDown, GraduationCap, ShieldCheck, RefreshCw, Trash2, LineChart, Upload, Plus } from 'lucide-react'
 
 // Elegant Logo Component
 const Logo = () => (
@@ -19,16 +21,23 @@ const Logo = () => (
 
 function App() {
   // --- STATE ---
+  const fileInputRef = React.useRef(null)
+
   const [files, setFiles] = useState([]) // Array of File objects
   const [results, setResults] = useState({}) // Map: index -> { status: 'pending'|'loading'|'success'|'error', data: ..., error: ... }
   const [selectedIndex, setSelectedIndex] = useState(0) // Index of currently viewed file
+  const [viewMode, setViewMode] = useState('extraction') // 'extraction' | 'analytics'
 
   const [preview, setPreview] = useState(null) // Base64 of CURRENT viewed file
   const [mode, setMode] = useState('pta_free')
   const [template, setTemplate] = useState('')
   const [debug, setDebug] = useState(false)
+  const [department, setDepartment] = useState('CSE')
+  const [className, setClassName] = useState('')
 
   const [batchProcessing, setBatchProcessing] = useState(false)
+  const [aiSummary, setAiSummary] = useState(null)
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
 
   // --- HANDLER: File Selection ---
   const handleFilesSelected = (newFiles) => {
@@ -45,7 +54,30 @@ function App() {
     setResults(initialResults)
 
     setSelectedIndex(0)
-    // We will load preview for index 0 via effect or manual call
+    setAiSummary(null) // Clear previous summary
+  }
+
+  // --- HANDLER: Append Files ---
+  const handleAppendFiles = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const appended = Array.from(e.target.files)
+
+      // Calculate new starting index
+      const startIndex = files.length
+
+      setFiles(prev => [...prev, ...appended])
+
+      setResults(prev => {
+        const next = { ...prev }
+        appended.forEach((_, i) => {
+          next[startIndex + i] = { status: 'pending' }
+        })
+        return next
+      })
+
+      // Reset input so same file selection triggers change again if needed
+      e.target.value = null
+    }
   }
 
   // --- EFFECT: Load Preview when Selected Index changes ---
@@ -85,6 +117,8 @@ function App() {
         imageBase64: base64, // The API expects raw field name 'imageBase64'
         template: template || null,
         debug: debug,
+        department: department,
+        class_name: className
       }
 
       // 3. Update Status -> Loading
@@ -112,6 +146,8 @@ function App() {
         [index]: { status: 'success', data: data }
       }))
 
+      return data  // Return the data so batch can collect comments
+
     } catch (err) {
       console.error(`Error processing file ${index}:`, err)
 
@@ -120,26 +156,58 @@ function App() {
         ...prev,
         [index]: { status: 'error', error: err.message || "Failed" }
       }))
+      return null
     }
   }
 
-  // --- LOGIC: Batch Loop ---
+  // --- LOGIC: Batch Loop with Auto-Summary ---
   const runBatchOCR = async () => {
     setBatchProcessing(true)
+    setAiSummary(null)
 
-    // Sequential Loop
+    const collectedComments = []
+
+    // Process all files and collect comments
     for (let i = 0; i < files.length; i++) {
-      // Skip if already successfully processed? 
-      // Optional: comment out next line to force re-process all
-      if (results[i]?.status === 'success') continue;
+      if (results[i]?.status === 'success') {
+        // Already processed, get comment from existing result
+        if (results[i].data?.comments) {
+          collectedComments.push(results[i].data.comments)
+        }
+        continue
+      }
 
-      // Scroll Sidebar to active? (Optional UX)
-      // setSelectedIndex(i) // Auto-switch view? Maybe annoying. Let's NOT auto-switch view, just update status.
-
-      await processSingleFile(files[i], i)
+      const data = await processSingleFile(files[i], i)
+      if (data?.comments) {
+        collectedComments.push(data.comments)
+      }
     }
 
     setBatchProcessing(false)
+
+    console.log("Collected comments:", collectedComments)
+
+    // Now call OpenAI if we have comments
+    if (collectedComments.length > 0) {
+      setIsGeneratingSummary(true)
+      try {
+        const response = await fetch('/analysis/summarize_ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comments: collectedComments })
+        })
+        const data = await response.json()
+        console.log("Summary data:", data)
+        setAiSummary(data)
+      } catch (e) {
+        console.error("Summary error:", e)
+        setAiSummary({ error: 'Failed to generate summary', details: e.message })
+      } finally {
+        setIsGeneratingSummary(false)
+      }
+    } else {
+      console.log("No comments to summarize")
+    }
   }
 
   const clearAll = () => {
@@ -147,6 +215,7 @@ function App() {
     setResults({})
     setSelectedIndex(0)
     setPreview(null)
+    setAiSummary(null)
   }
 
   // Computed for UI
@@ -165,12 +234,33 @@ function App() {
               <span className="text-xl font-serif font-bold tracking-tight text-primary">Agnel Guardian</span>
             </div>
           </div>
+
+          <div className="flex items-center bg-slate-100 p-1 rounded-lg">
+            <Button
+              variant={viewMode === 'extraction' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('extraction')}
+              className="gap-2"
+            >
+              <Upload className="w-4 h-4" /> Extraction
+            </Button>
+            <Button
+              variant={viewMode === 'analytics' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('analytics')}
+              className="gap-2"
+            >
+              <LineChart className="w-4 h-4" /> Analytics
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="container max-w-7xl mx-auto px-4 py-8 md:py-12 space-y-8">
 
-        {!hasFiles ? (
+        {viewMode === 'analytics' ? (
+          <AnalyticsView />
+        ) : !hasFiles ? (
           // --- VIEW 1: EMPTY STATE (HERO UPLOAD) ---
           <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center space-y-4">
@@ -178,7 +268,7 @@ function App() {
                 Start Extraction
               </h1>
               <p className="text-muted-foreground text-lg font-light">
-                Upload batches of PTA forms, PDF transcripts, or receipts.
+                Upload batches of PTA forms in images or PDFs.
               </p>
             </div>
 
@@ -186,7 +276,8 @@ function App() {
               <FileUpload onFilesSelected={handleFilesSelected} />
             </Card>
 
-            {/* Quick Config (Optional for empty state) */}
+
+
             <div className="flex justify-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-primary" /> Secure Processing
@@ -205,6 +296,30 @@ function App() {
 
               {/* Action Bar */}
               <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" onClick={clearAll} disabled={batchProcessing} title="Clear All">
+                  <Trash2 className="w-4 h-4 text-muted-foreground" />
+                </Button>
+
+                <div className="w-px h-6 bg-border mx-1" />
+
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleAppendFiles}
+                  accept="image/*,application/pdf"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={batchProcessing}
+                  title="Add More Files"
+                >
+                  <Plus className="w-4 h-4 text-muted-foreground" />
+                </Button>
+
                 <Button
                   size="lg"
                   onClick={runBatchOCR}
@@ -212,45 +327,11 @@ function App() {
                   className="flex-1 font-serif tracking-wide shadow-lg shadow-primary/20"
                 >
                   {batchProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {batchProcessing ? 'Processing Batch...' : 'Run Extraction'}
-                </Button>
-                <Button variant="outline" size="icon" onClick={clearAll} disabled={batchProcessing} title="Clear All">
-                  <Trash2 className="w-4 h-4 text-muted-foreground" />
+                  {batchProcessing ? 'Process New' : 'Run Extraction'}
                 </Button>
               </div>
 
-              {/* Config Card (Compact) */}
-              <Card className="border-none shadow-md bg-white/60 backdrop-blur-sm shrink-0">
-                <CardHeader className="py-3 px-4">
-                  <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="pb-4 px-4 space-y-3">
-                  <div className="space-y-1">
-                    <div className="relative">
-                      <select
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring appearance-none"
-                        value={mode}
-                        onChange={(e) => setMode(e.target.value)}
-                      >
-                        <option value="auto">Intelligent (Auto)</option>
-                        <option value="pta">Template (YAML)</option>
-                        <option value="pta_free">PTA (Label-based)</option>
-                      </select>
-                      <ChevronDown className="absolute right-3 top-2.5 h-3 w-3 text-muted-foreground pointer-events-none opacity-50" />
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="debug"
-                      className="w-3.5 h-3.5 rounded-sm border-primary text-primary focus:ring-primary"
-                      checked={debug}
-                      onChange={(e) => setDebug(e.target.checked)}
-                    />
-                    <Label htmlFor="debug" className="cursor-pointer font-normal text-xs text-muted-foreground">Debug Mode</Label>
-                  </div>
-                </CardContent>
-              </Card>
+
 
               {/* Sidebar Inbox List (Scrollable) */}
               <div className="flex-1 min-h-0">
@@ -295,6 +376,18 @@ function App() {
                     <p className="font-serif">Analyzing document...</p>
                   </div>
                 )}
+
+                {/* AI Summary - Inline after results */}
+                {isGeneratingSummary && (
+                  <div className="mt-6 p-6 border-2 border-dashed border-primary/30 rounded-xl bg-primary/5 text-center">
+                    <span className="text-primary font-serif">Generating Summary...</span>
+                  </div>
+                )}
+                {aiSummary && !isGeneratingSummary && (
+                  <div className="mt-6">
+                    <AISummaryReport data={aiSummary} />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -302,6 +395,8 @@ function App() {
         )}
 
       </main>
+
+
     </div>
   )
 }

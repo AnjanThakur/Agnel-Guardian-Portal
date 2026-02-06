@@ -14,6 +14,7 @@ class SPAStaticFiles(StaticFiles):
         return response
 
 from app.routes.pta_free import router as pta_free_router
+from app.routes.analysis_routes import router as analysis_router
 
 app = FastAPI(
     title="Agnel OCR – Vision PTA",
@@ -39,5 +40,9 @@ def root_index():
     # Serve the React App Entry Point
     return FileResponse("app/static/index.html")
 
-# PTA free endpoint (single Vision call + OpenCV table)
+# API Routers
 app.include_router(pta_free_router)
+app.include_router(analysis_router)
+
+from app.routes.analytics import router as analytics_router
+app.include_router(analytics_router)
