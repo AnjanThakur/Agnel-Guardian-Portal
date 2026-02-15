@@ -215,6 +215,12 @@ Project Link: [https://github.com/Gauravch-dev/Agnel-Guardian-Portal](https://gi
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
+## 👥 Contributors
+
+<a href="https://github.com/Gauravch-dev/Agnel-Guardian-Portal/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Gauravch-dev/Agnel-Guardian-Portal" />
+</a>
+
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
