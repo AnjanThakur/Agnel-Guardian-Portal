@@ -165,23 +165,42 @@ function App() {
     setBatchProcessing(true)
     setAiSummary(null)
 
-    const collectedComments = []
+    // Ordered storage for comments
+    const commentsByIndex = new Array(files.length).fill(null);
 
-    // Process all files and collect comments
-    for (let i = 0; i < files.length; i++) {
-      if (results[i]?.status === 'success') {
-        // Already processed, get comment from existing result
-        if (results[i].data?.comments) {
-          collectedComments.push(results[i].data.comments)
+    // Create a queue of pending file indices
+    const queue = files.map((file, index) => ({ file, index }));
+    const activeWorkers = [];
+    const CONCURRENCY_LIMIT = 5;
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const { file, index } = queue.shift();
+
+        if (results[index]?.status === 'success') {
+          // Already processed, get comment from existing result
+          if (results[index].data?.comments) {
+            commentsByIndex[index] = results[index].data.comments;
+          }
+          continue;
         }
-        continue
-      }
 
-      const data = await processSingleFile(files[i], i)
-      if (data?.comments) {
-        collectedComments.push(data.comments)
+        const data = await processSingleFile(file, index);
+        if (data?.comments) {
+          commentsByIndex[index] = data.comments;
+        }
       }
+    };
+
+    // Start workers
+    for (let i = 0; i < CONCURRENCY_LIMIT; i++) {
+      activeWorkers.push(worker());
     }
+
+    await Promise.all(activeWorkers);
+
+    // Reconstruct collectedComments in order
+    const collectedComments = commentsByIndex.filter(c => c !== null);
 
     setBatchProcessing(false)
 

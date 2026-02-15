@@ -1,12 +1,16 @@
-@'
 # Secrets
 cloud-vision-key/
 *.json
 remains/
+.env
+
 # Python
 .venv/
 __pycache__/
 *.pyc
+
+# Node
+node_modules/
 
 # App debug artifacts
 debug_out/
@@ -14,4 +18,3 @@ debug_out/
 # OS/editor misc
 .DS_Store
 Thumbs.db
-'@ | Out-File -Encoding UTF8 .gitignore
