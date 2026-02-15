@@ -43,13 +43,13 @@ This system automates the entire process — reducing hours of manual work into 
 ## 📷 Workflow Preview
 
 <p align="center">
-  <img src="screenshots/dashboard.png" width="420"/>
-  <img src="screenshots/results.png" width="420"/>
+  <img src="screenshots/dashboard.jpeg" width="420"/>
+  <img src="screenshots/results.jpeg" width="420"/>
 </p>
 
 <p align="center">
-  <img src="screenshots/recs.png" width="420"/>
-  <img src="screenshots/analytics.png" width="420"/>
+  <img src="screenshots/recs.jpeg" width="420"/>
+  <img src="screenshots/analytics.jpeg" width="420"/>
 </p>
 
 The **Agnel Guardian Portal** is a sophisticated solution designed to modernize the processing of Parent-Teacher Association (PTA) feedback forms. By leveraging advanced OCR technologies, it eliminates manual data entry, providing instant insights into departmental performance.
