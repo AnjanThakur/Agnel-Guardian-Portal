@@ -21,10 +21,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS (relaxed; tighten if needed)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -46,3 +46,6 @@ app.include_router(analysis_router)
 
 from app.routes.analytics import router as analytics_router
 app.include_router(analytics_router)
+
+from app.routes.student_routes import router as student_router
+app.include_router(student_router)

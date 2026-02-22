@@ -1,0 +1,49 @@
+student_id,student_name,class_name,department,semester,subject,marks_obtained,max_marks
+S001,John Doe,TE-A,CSE,1,Maths I,85,100
+S001,John Doe,TE-A,CSE,1,Physics,78,100
+S001,John Doe,TE-A,CSE,1,Chemistry,82,100
+S001,John Doe,TE-A,CSE,1,Programming,90,100
+S001,John Doe,TE-A,CSE,2,Maths II,92,100
+S001,John Doe,TE-A,CSE,2,Mechanics,88,100
+S001,John Doe,TE-A,CSE,2,Graphics,85,100
+S001,John Doe,TE-A,CSE,2,Communication,81,100
+S001,John Doe,TE-A,CSE,3,DSA,95,100
+S001,John Doe,TE-A,CSE,3,COA,89,100
+S001,John Doe,TE-A,CSE,3,OOP,94,100
+S001,John Doe,TE-A,CSE,3,Discrete Maths,87,100
+S001,John Doe,TE-A,CSE,4,OS,91,100
+S001,John Doe,TE-A,CSE,4,DBMS,96,100
+S001,John Doe,TE-A,CSE,4,Networks,88,100
+S001,John Doe,TE-A,CSE,4,TOC,85,100
+S001,John Doe,TE-A,CSE,5,Web Tech,94,100
+S001,John Doe,TE-A,CSE,5,AI,92,100
+S001,John Doe,TE-A,CSE,5,SPCC,89,100
+S001,John Doe,TE-A,CSE,5,Cyber Security,90,100
+S001,John Doe,TE-A,CSE,6,Machine Learning,95,100
+S001,John Doe,TE-A,CSE,6,Cloud Computing,91,100
+S001,John Doe,TE-A,CSE,6,Software Eng,88,100
+S001,John Doe,TE-A,CSE,6,IoT,87,100
+S002,Emily Doe,SE-B,CSE,1,Maths I,65,100
+S002,Emily Doe,SE-B,CSE,1,Physics,55,100
+S002,Emily Doe,SE-B,CSE,1,Chemistry,60,100
+S002,Emily Doe,SE-B,CSE,1,Programming,58,100
+S002,Emily Doe,SE-B,CSE,2,Maths II,50,100
+S002,Emily Doe,SE-B,CSE,2,Mechanics,45,100
+S002,Emily Doe,SE-B,CSE,2,Graphics,48,100
+S002,Emily Doe,SE-B,CSE,2,Communication,52,100
+S002,Emily Doe,SE-B,CSE,3,DSA,39,100
+S002,Emily Doe,SE-B,CSE,3,COA,41,100
+S002,Emily Doe,SE-B,CSE,3,OOP,45,100
+S002,Emily Doe,SE-B,CSE,3,Discrete Maths,35,100
+S002,Emily Doe,SE-B,CSE,4,OS,32,100
+S002,Emily Doe,SE-B,CSE,4,DBMS,38,100
+S002,Emily Doe,SE-B,CSE,4,Networks,40,100
+S002,Emily Doe,SE-B,CSE,4,TOC,28,100
+S002,Emily Doe,SE-B,CSE,5,Web Tech,42,100
+S002,Emily Doe,SE-B,CSE,5,AI,35,100
+S002,Emily Doe,SE-B,CSE,5,SPCC,30,100
+S002,Emily Doe,SE-B,CSE,5,Cyber Security,45,100
+S002,Emily Doe,SE-B,CSE,6,Machine Learning,38,100
+S002,Emily Doe,SE-B,CSE,6,Cloud Computing,40,100
+S002,Emily Doe,SE-B,CSE,6,Software Eng,35,100
+S002,Emily Doe,SE-B,CSE,6,IoT,32,100

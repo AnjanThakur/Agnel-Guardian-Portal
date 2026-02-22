@@ -8,7 +8,8 @@ import { ResultsDisplay } from '@/components/ResultsDisplay'
 import { SidebarList } from '@/components/SidebarList'
 import { AISummaryReport } from '@/components/AISummaryReport'
 import { AnalyticsView } from '@/components/AnalyticsView'
-import { Loader2, ChevronDown, GraduationCap, ShieldCheck, RefreshCw, Trash2, LineChart, Upload, Plus } from 'lucide-react'
+import { ParentDashboard } from '@/components/ParentDashboard'
+import { Loader2, ChevronDown, GraduationCap, ShieldCheck, RefreshCw, Trash2, LineChart, Upload, Plus, Users } from 'lucide-react'
 
 // Elegant Logo Component
 const Logo = () => (
@@ -271,13 +272,23 @@ function App() {
             >
               <LineChart className="w-4 h-4" /> Analytics
             </Button>
+            <Button
+              variant={viewMode === 'parent' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('parent')}
+              className="gap-2"
+            >
+              <Users className="w-4 h-4" /> Parent Portal
+            </Button>
           </div>
         </div>
       </header>
 
       <main className="container max-w-7xl mx-auto px-4 py-8 md:py-12 space-y-8">
 
-        {viewMode === 'analytics' ? (
+        {viewMode === 'parent' ? (
+          <ParentDashboard />
+        ) : viewMode === 'analytics' ? (
           <AnalyticsView />
         ) : !hasFiles ? (
           // --- VIEW 1: EMPTY STATE (HERO UPLOAD) ---
