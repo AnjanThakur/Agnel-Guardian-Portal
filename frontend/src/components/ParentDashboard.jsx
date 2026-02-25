@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,23 +8,37 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Search, User, GraduationCap, Download } from 'lucide-react';
 
 export function ParentDashboard() {
-    // Simulating a logged-in parent who has two children in the college
-    const siblings = ['S001', 'S002'];
-    const [activeSibling, setActiveSibling] = useState(siblings[0]);
+    const { user, token } = useAuth();
+    const siblings = user?.linked_students || [];
+    const [activeSibling, setActiveSibling] = useState(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [studentData, setStudentData] = useState(null);
     const [selectedSemester, setSelectedSemester] = useState(null);
 
+    // Auto-select first sibling when user data loads
+    useEffect(() => {
+        if (!activeSibling && siblings.length > 0) {
+            setActiveSibling(siblings[0]);
+        }
+    }, [user, activeSibling, siblings]);
+
     useEffect(() => {
         const fetchStudentData = async () => {
-            if (!activeSibling) return;
+            if (!activeSibling) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             setError('');
 
             try {
-                const response = await fetch(`http://127.0.0.1:8000/student/${activeSibling}`);
+                const response = await fetch(`http://127.0.0.1:8000/student/${activeSibling}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 if (!response.ok) {
                     if (response.status === 404) {
                         throw new Error(`Student ${activeSibling} not found in database.`);
@@ -78,26 +93,33 @@ export function ParentDashboard() {
             </div>
 
             {/* Sibling Switcher */}
-            <div className="flex justify-center items-center gap-4 mb-8">
-                <div className="bg-slate-100 p-1.5 rounded-xl inline-flex shadow-sm">
-                    {siblings.map((sib) => (
-                        <button
-                            key={sib}
-                            onClick={() => setActiveSibling(sib)}
-                            className={`px-6 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 ${activeSibling === sib
+            {siblings.length > 0 ? (
+                <div className="flex justify-center items-center gap-4 mb-8">
+                    <div className="bg-slate-100 p-1.5 rounded-xl inline-flex shadow-sm">
+                        {siblings.map((sib) => (
+                            <button
+                                key={sib}
+                                onClick={() => setActiveSibling(sib)}
+                                className={`px-6 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 ${activeSibling === sib
                                     ? 'bg-white text-primary shadow-md transform scale-105'
                                     : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2">
-                                <User className="w-4 h-4" /> Student {sib}
-                            </span>
-                        </button>
-                    ))}
+                                    }`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <User className="w-4 h-4" /> Student {sib}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className="text-center p-8 bg-slate-50 rounded-xl mb-8 border border-slate-100">
+                    <p className="text-slate-500 font-medium">No students linked to your account yet.</p>
+                    <p className="text-sm text-slate-400 mt-1">Please head to the Profile section to link a student ID.</p>
+                </div>
+            )}
 
-            {loading && (
+            {loading && siblings.length > 0 && (
                 <div className="flex justify-center items-center py-20">
                     <Loader2 className="w-10 h-10 animate-spin text-primary" />
                 </div>

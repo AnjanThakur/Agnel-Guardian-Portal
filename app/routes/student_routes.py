@@ -1,14 +1,16 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from app.core.database import students, student_marks
 from app.services.marks_ingest import process_marks_csv
 from app.models.marks_schemas import StudentMarksResponse, StudentProfile, SemesterMarks, MarkEntry
+from app.core.security import get_current_active_user, require_role
 
 router = APIRouter(prefix="/student", tags=["Student Marks"])
 
-@router.post("/admin/marks/upload")
+@router.post("/admin/marks/upload", dependencies=[Depends(require_role(["admin", "teacher"]))])
 async def upload_marks_csv(file: UploadFile = File(...)):
     """
     Endpoint for Admin/Teachers to bulk upload student marks via CSV.
+    Requires Admin/Teacher JWT role.
     """
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed.")
@@ -18,10 +20,22 @@ async def upload_marks_csv(file: UploadFile = File(...)):
     return result
 
 @router.get("/{student_id}", response_model=StudentMarksResponse)
-def get_student_marks_dashboard(student_id: str):
+def get_student_marks_dashboard(
+    student_id: str,
+    current_user: dict = Depends(get_current_active_user)
+):
     """
     Endpoint for Parents to view their child's profile and marks progression across all mapped semesters.
+    Protected by role checks.
     """
+    role = current_user.get("role")
+    
+    # Simple ACL check: If they are a parent/student, verify this student_id is within their linked_students
+    if role in ["parent", "student"]:
+        linked_students = current_user.get("linked_students", [])
+        if student_id not in linked_students:
+             raise HTTPException(status_code=403, detail="You do not have authorization to view this student's profile.")
+             
     # 1. Fetch Profile
     student_doc = students.find_one({"student_id": student_id})
     if not student_doc:

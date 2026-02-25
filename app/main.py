@@ -49,3 +49,9 @@ app.include_router(analytics_router)
 
 from app.routes.student_routes import router as student_router
 app.include_router(student_router)
+
+from app.routes.auth_routes import router as auth_router
+app.include_router(auth_router)
+
+from app.routes.message_routes import router as message_router
+app.include_router(message_router)

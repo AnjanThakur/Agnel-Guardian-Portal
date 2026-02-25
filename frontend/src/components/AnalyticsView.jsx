@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, PieChart, Pie, Cell } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ const CRITERIA_MAPPING = {
 const SHORT_LABELS = Object.values(CRITERIA_MAPPING);
 
 export function AnalyticsView() {
+    const { token } = useAuth();
     const [department, setDepartment] = useState('CSE');
     const [className, setClassName] = useState('');
 
@@ -46,7 +48,11 @@ export function AnalyticsView() {
             if (className) {
                 url += `&cls=${className}`;
             }
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             const json = await response.json();
 
             // 1. Criterion-wise Distribution (Stacked Bar)
