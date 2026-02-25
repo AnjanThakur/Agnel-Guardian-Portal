@@ -40,3 +40,10 @@ class TokenData(BaseModel):
     
 class LinkStudentRequest(BaseModel):
     student_id: str
+
+class AdminUpdateStudentsRequest(BaseModel):
+    linked_students: List[str]
+
+class AdminSMTPSettings(BaseModel):
+    sender_email: str
+    app_password: str

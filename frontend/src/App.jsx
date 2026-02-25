@@ -15,6 +15,7 @@ import { ParentDashboard } from '@/components/ParentDashboard'
 import { Login } from '@/components/Login'
 import { TeacherMailbox } from '@/components/TeacherMailbox'
 import { ProfileManagement } from '@/components/ProfileManagement'
+import { AdminUsers } from '@/components/AdminUsers'
 import { useAuth } from '@/context/AuthContext'
 
 import { Loader2, ChevronDown, GraduationCap, ShieldCheck, RefreshCw, Trash2, LineChart, Upload, Plus, Users, UserCog, Mail, LogOut } from 'lucide-react'
@@ -159,6 +160,13 @@ function App() {
       <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
         {isTeacher && (
           <>
+            {user.role === 'admin' && (
+              <Link to="/admin/users">
+                <Button variant={location.pathname === '/admin/users' ? 'default' : 'ghost'} size="sm" className="gap-2 font-medium">
+                  <UserCog className="w-4 h-4" /> Manage Users
+                </Button>
+              </Link>
+            )}
             <Link to="/extraction">
               <Button variant={location.pathname === '/extraction' ? 'default' : 'ghost'} size="sm" className="gap-2 font-medium">
                 <Upload className="w-4 h-4" /> Extraction
@@ -227,6 +235,7 @@ function App() {
           <Route path="/extraction" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ExtractionView /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><AnalyticsView /></ProtectedRoute>} />
           <Route path="/mailbox" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><TeacherMailbox /></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>} />
 
           {/* Protected Parent/Student Routes */}
           <Route path="/parent-portal" element={<ProtectedRoute allowedRoles={['parent', 'student']}><ParentDashboard /></ProtectedRoute>} />

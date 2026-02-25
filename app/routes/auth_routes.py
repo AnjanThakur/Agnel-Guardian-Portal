@@ -10,10 +10,14 @@ from app.core.security import (
     get_current_active_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from app.models.user_schemas import UserCreate, UserUpdate, UserResponse, Token, LinkStudentRequest
+from app.core.database import db
+from app.models.user_schemas import UserCreate, UserUpdate, UserResponse, Token, LinkStudentRequest, AdminUpdateStudentsRequest, AdminSMTPSettings
 from app.core.security import require_role
+from app.core.database import db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+settings_collection = db["settings"]
+settings_collection = db["settings"]
 
 @router.post("/register", response_model=UserResponse)
 def register_user(user: UserCreate):
@@ -148,3 +152,76 @@ def link_student(req: LinkStudentRequest, current_user: dict = Depends(get_curre
         linked_students=current_links,
         is_approved=current_user.get("is_approved", False)
     )
+
+@router.get("/admin/users", response_model=list[UserResponse], dependencies=[Depends(require_role(["admin"]))])
+def get_all_users():
+    """
+    Endpoint for Admins to fetch all users in the system to manage them.
+    """
+    users_cursor = users_collection.find({})
+    user_list = []
+    
+    for doc in users_cursor:
+        user_list.append(UserResponse(
+            email=doc["email"],
+            role=doc["role"],
+            linked_students=doc.get("linked_students", []),
+            is_approved=doc.get("is_approved", False)
+        ))
+        
+    return user_list
+
+@router.put("/admin/users/{user_email}/students", response_model=UserResponse, dependencies=[Depends(require_role(["admin"]))])
+def admin_update_linked_students(user_email: str, req: AdminUpdateStudentsRequest):
+    """
+    Endpoint for Admins to explicitly overwrite the linked_students array for a given user.
+    """
+    user = users_collection.find_one({"email": user_email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    if user["role"] not in ["parent", "student"]:
+        raise HTTPException(status_code=400, detail="Can only link students to parent or student accounts.")
+        
+    # Clean up input list (uppercase, strip)
+    clean_ids = [sid.strip().upper() for sid in req.linked_students if sid.strip()]
+    
+    users_collection.update_one(
+        {"email": user_email},
+        {"$set": {"linked_students": clean_ids}}
+    )
+    
+    return UserResponse(
+        email=user["email"],
+        role=user["role"],
+        linked_students=clean_ids,
+        is_approved=user.get("is_approved", False)
+    )
+
+@router.get("/admin/settings/smtp", response_model=AdminSMTPSettings, dependencies=[Depends(require_role(["admin"]))])
+def get_smtp_settings():
+    """
+    Fetch the global SMTP settings for the application.
+    """
+    config = settings_collection.find_one({"_id": "smtp_config"})
+    if not config:
+        return AdminSMTPSettings(sender_email="", app_password="")
+    return AdminSMTPSettings(
+        sender_email=config.get("sender_email", ""),
+        app_password=config.get("app_password", "")
+    )
+
+@router.put("/admin/settings/smtp", response_model=AdminSMTPSettings, dependencies=[Depends(require_role(["admin"]))])
+def update_smtp_settings(settings: AdminSMTPSettings):
+    """
+    Update the global SMTP credentials used to dispatch Teacher emails.
+    """
+    settings_collection.update_one(
+        {"_id": "smtp_config"},
+        {"$set": {
+            "sender_email": settings.sender_email,
+            "app_password": settings.app_password
+        }},
+        upsert=True
+    )
+    return settings

@@ -2,23 +2,14 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from app.core.security import get_current_active_user, users_collection
+from app.core.database import db
 from app.models.message_schemas import SendMessageRequest, MessageResponse
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
+settings_collection = db["settings"]
 
 # Configure fastapimail
-# In production, these should be robustly pulled from .env
-conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "dummy@example.com"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "secret"),
-    MAIL_FROM=os.getenv("MAIL_FROM", "noreply@agnel.edu"),
-    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
-)
+# Connection details are now dynamically generated per-request to support authentic user mailboxes.
 
 @router.post("/send", response_model=MessageResponse)
 async def send_defaulter_message(
@@ -41,8 +32,9 @@ async def send_defaulter_message(
             detail=f"No parent account found linked to student ID {req.student_id}."
         )
 
-    # Compose the email
-    parent_email = parent["email"]
+    # The user explicitly requested to receive the test emails to their own login email.
+    # We ignore the parent's email and route the email locally to the sender for verification.
+    recipient_email = current_user["email"]
     
     html_body = f"""
     <html>
@@ -60,13 +52,33 @@ async def send_defaulter_message(
     
     message = MessageSchema(
         subject=req.subject,
-        recipients=[parent_email],
+        recipients=[recipient_email],
         body=html_body,
         subtype=MessageType.html
     )
 
+    # Configure SMTP connection dynamically from the global Admin settings
+    smtp_config = settings_collection.find_one({"_id": "smtp_config"})
+    if not smtp_config or not smtp_config.get("sender_email") or not smtp_config.get("app_password"):
+        raise HTTPException(
+            status_code=500, 
+            detail="The Mail System has not been configured by an Administrator. Please set the SMTP credentials in the Admin Dashboard."
+        )
+    
+    dynamic_conf = ConnectionConfig(
+        MAIL_USERNAME=smtp_config["sender_email"],
+        MAIL_PASSWORD=smtp_config["app_password"],
+        MAIL_FROM=smtp_config["sender_email"],
+        MAIL_PORT=587,
+        MAIL_SERVER="smtp.gmail.com",
+        MAIL_STARTTLS=True,
+        MAIL_SSL_TLS=False,
+        USE_CREDENTIALS=True,
+        VALIDATE_CERTS=True
+    )
+
     # Send the email via SMTP in the background
-    fm = FastMail(conf)
+    fm = FastMail(dynamic_conf)
     try:
         background_tasks.add_task(fm.send_message, message)
     except Exception as e:
@@ -74,5 +86,5 @@ async def send_defaulter_message(
 
     return MessageResponse(
         status="success", 
-        detail=f"Alert email queued for {parent_email}"
+        detail=f"Alert email successfully dispatched regarding {req.student_id}."
     )

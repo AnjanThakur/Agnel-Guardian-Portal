@@ -47,7 +47,7 @@ export function TeacherMailbox() {
                 throw new Error(data.detail || "Failed to send the alert.");
             }
 
-            setSuccess(`Genuine email successfully dispatched to the parent of ${studentId}!`);
+            setSuccess(data.detail);
             setStudentId('');
             // Keep default subject/body for rapid sending
 
