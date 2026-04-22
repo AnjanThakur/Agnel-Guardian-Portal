@@ -17,6 +17,7 @@ import { TeacherMailbox } from '@/components/TeacherMailbox'
 import { ProfileManagement } from '@/components/ProfileManagement'
 import { AdminUsers } from '@/components/AdminUsers'
 import { useAuth } from '@/context/AuthContext'
+import { useExtraction } from '@/context/ExtractionContext'
 
 import { Loader2, ChevronDown, GraduationCap, ShieldCheck, RefreshCw, Trash2, LineChart, Upload, Plus, Users, UserCog, Mail, LogOut } from 'lucide-react'
 
@@ -59,9 +60,14 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 // Extracted Extraction View (Legacy feature but protected for Teachers)
 function ExtractionView() {
   const fileInputRef = React.useRef(null)
-  const [files, setFiles] = useState([])
-  const [results, setResults] = useState({})
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  const { 
+    files, setFiles, 
+    results, setResults, 
+    aiSummary, setAiSummary, 
+    selectedIndex, setSelectedIndex, 
+    clearAll 
+  } = useExtraction()
+
   const [preview, setPreview] = useState(null)
   const [mode, setMode] = useState('pta_free')
   const [template, setTemplate] = useState('')
@@ -69,17 +75,112 @@ function ExtractionView() {
   const [department, setDepartment] = useState('CSE')
   const [className, setClassName] = useState('')
   const [batchProcessing, setBatchProcessing] = useState(false)
-  const [aiSummary, setAiSummary] = useState(null)
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
 
-  // ... (Keep existing extraction logic here, simplified for brevity as it works fine)
-  const clearAll = () => {
-    setFiles([])
-    setResults({})
-    setSelectedIndex(0)
-    setPreview(null)
-    setAiSummary(null)
+  // --- HANDLER: Append Files ---
+  const handleAppendFiles = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const appended = Array.from(e.target.files)
+      const startIndex = files.length
+      setFiles(prev => [...prev, ...appended])
+      setResults(prev => {
+        const next = { ...prev }
+        appended.forEach((_, i) => { next[startIndex + i] = { status: 'pending' } })
+        return next
+      })
+      e.target.value = null
+    }
   }
+
+  // --- LOGIC: Helper to process ONE file ---
+  const processSingleFile = async (file, index) => {
+    try {
+      const toBase64 = (f) => new Promise((resolve, reject) => {
+        const r = new FileReader()
+        r.readAsDataURL(f)
+        r.onload = () => resolve(r.result)
+        r.onerror = error => reject(error)
+      })
+      const base64 = await toBase64(file)
+
+      const url = mode === "pta" ? "/ocr/pta" : mode === "pta_free" ? "/ocr/pta_free" : "/ocr/auto"
+
+      const payload = {
+        imageBase64: base64,
+        template: template || null,
+        debug: debug,
+        department: department,
+        class_name: className
+      }
+
+      setResults(prev => ({ ...prev, [index]: { ...prev[index], status: 'loading' } }))
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) throw new Error(`Server error: ${response.status}`)
+      const data = await response.json()
+
+      setResults(prev => ({ ...prev, [index]: { status: 'success', data: data } }))
+      return data
+
+    } catch (err) {
+      console.error(`Error processing file ${index}:`, err)
+      setResults(prev => ({ ...prev, [index]: { status: 'error', error: err.message || "Failed" } }))
+      return null
+    }
+  }
+
+  // --- LOGIC: Batch Loop ---
+  const runBatchOCR = async () => {
+    setBatchProcessing(true)
+    setAiSummary(null)
+
+    const commentsByIndex = new Array(files.length).fill(null);
+    const queue = files.map((file, index) => ({ file, index }));
+    const activeWorkers = [];
+    const CONCURRENCY_LIMIT = 5;
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const { file, index } = queue.shift();
+        if (results[index]?.status === 'success') {
+          if (results[index].data?.comments) commentsByIndex[index] = results[index].data.comments;
+          continue;
+        }
+        const data = await processSingleFile(file, index);
+        if (data?.comments) commentsByIndex[index] = data.comments;
+      }
+    };
+
+    for (let i = 0; i < CONCURRENCY_LIMIT; i++) activeWorkers.push(worker());
+    await Promise.all(activeWorkers);
+
+    const collectedComments = commentsByIndex.filter(c => c !== null);
+    setBatchProcessing(false)
+
+    if (collectedComments.length > 0) {
+      setIsGeneratingSummary(true)
+      try {
+        const response = await fetch('/analysis/summarize_ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comments: collectedComments })
+        })
+        const data = await response.json()
+        setAiSummary(data)
+      } catch (e) {
+        setAiSummary({ error: 'Failed to generate summary', details: e.message })
+      } finally {
+        setIsGeneratingSummary(false)
+      }
+    }
+  }
+
+  // clearAll is now handled by Context
 
   const handleFilesSelected = (newFiles) => {
     setFiles(newFiles)
@@ -128,6 +229,36 @@ function ExtractionView() {
               <Button variant="outline" size="icon" onClick={clearAll} disabled={batchProcessing} title="Clear All">
                 <Trash2 className="w-4 h-4 text-muted-foreground" />
               </Button>
+
+              <div className="w-px h-6 bg-border mx-1" />
+
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleAppendFiles}
+                accept="image/*,application/pdf"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={batchProcessing}
+                title="Add More Files"
+              >
+                <Plus className="w-4 h-4 text-muted-foreground" />
+              </Button>
+
+              <Button
+                size="lg"
+                onClick={runBatchOCR}
+                disabled={batchProcessing}
+                className="flex-1 font-serif tracking-wide shadow-lg shadow-primary/20"
+              >
+                {batchProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {batchProcessing ? 'Process New' : 'Run Extraction'}
+              </Button>
             </div>
             <div className="flex-1 min-h-0">
               <SidebarList files={files} activeIndex={selectedIndex} onSelect={setSelectedIndex} results={results} />
@@ -136,6 +267,37 @@ function ExtractionView() {
           <div className="lg:col-span-8 space-y-6">
             <div className="min-h-[600px]">
               <ResultsDisplay data={currentResult.data || {}} previewUrl={preview} />
+
+              {currentResult.status === 'error' && (
+                <div className="mt-4 p-4 border border-destructive/20 bg-destructive/5 rounded-lg text-destructive text-sm font-medium">
+                  Analysis Failed: {currentResult.error}
+                </div>
+              )}
+
+              {currentResult.status === 'pending' && !currentResult.error && (
+                <div className="h-64 flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50 mt-4">
+                  <p className="font-serif italic">Ready to process.</p>
+                  <p className="text-xs mt-1">Click "Run Extraction" to start batch.</p>
+                </div>
+              )}
+
+              {currentResult.status === 'loading' && (
+                <div className="h-64 flex flex-col items-center justify-center text-primary mt-4">
+                  <Loader2 className="w-8 h-8 animate-spin mb-4 text-accent" />
+                  <p className="font-serif">Analyzing document...</p>
+                </div>
+              )}
+
+              {isGeneratingSummary && (
+                <div className="mt-6 p-6 border-2 border-dashed border-primary/30 rounded-xl bg-primary/5 text-center">
+                  <span className="text-primary font-serif">Generating Summary...</span>
+                </div>
+              )}
+              {aiSummary && !isGeneratingSummary && (
+                <div className="mt-6">
+                  <AISummaryReport data={aiSummary} />
+                </div>
+              )}
             </div>
           </div>
         </div>

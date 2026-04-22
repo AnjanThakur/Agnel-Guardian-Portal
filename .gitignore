@@ -18,3 +18,9 @@ debug_out/
 # OS/editor misc
 .DS_Store
 Thumbs.db
+.venv/ 
+.venv_broken/ 
+__pycache__/ 
+*.pyc 
+*.pyd 
+*.dll 

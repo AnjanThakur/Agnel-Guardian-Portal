@@ -11,6 +11,13 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      '/ocr': 'http://localhost:8000',
+      '/analysis': 'http://localhost:8000',
+      '/analytics': 'http://localhost:8000'
+    }
+  },
   build: {
     outDir: '../app/static',
     emptyOutDir: true,

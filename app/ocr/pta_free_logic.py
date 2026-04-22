@@ -51,9 +51,26 @@ def extract_comments_and_details(
     page_bgr: np.ndarray,
     table_bottom_y: int,
     debug_dir: str | None = None,
+    ocr_lines: List[Dict[str, Any]] | None = None,
 ) -> Tuple[str, Dict[str, str]]:
     h, w = page_bgr.shape[:2]
 
+    # Use coordinates to filter text if ocr_lines is provided (faster)
+    if ocr_lines is not None:
+        y1 = min(h - 1, int(table_bottom_y) + 10)
+        y2 = int(0.92 * h)
+        
+        relevant_text_parts = []
+        for line in ocr_lines:
+            # line["box"] = [x1, y1, x2, y2]
+            box_y1 = line["box"][1]
+            if box_y1 >= y1 and box_y1 <= y2:
+                relevant_text_parts.append(line["text"])
+        
+        raw = " ".join(relevant_text_parts)
+        return _parse_raw_comment_text(raw)
+
+    # Legacy approach: Crop and re-run OCR (slower)
     x1 = int(0.03 * w)
     x2 = int(0.97 * w)
     y1 = min(h - 1, int(table_bottom_y) + 10)
@@ -198,6 +215,7 @@ def _process_single_page(img_bgr: np.ndarray, debug_dir: str) -> Dict[str, Any]:
             page_bgr=img_bgr,
             table_bottom_y=table_bottom,
             debug_dir=debug_dir,
+            ocr_lines=ocr_lines # Pass extracted lines to avoid second API call
         )
 
     if ENABLE_ML and not DATASET_MODE:
@@ -255,6 +273,27 @@ def run_pta_free(req: OCRRequest) -> Dict[str, Any]:
                 page_data = _process_single_page(img_bgr, page_dir)
                 page_data["page"] = idx
                 page_results.append(page_data)
+
+                # -------- PERSIST TO DB --------
+                try:
+                    rating_results = []
+                    for key in PTA_QUESTION_KEYS:
+                        r = page_data["ratings"].get(key, {})
+                        rating_results.append({
+                            "value": r.get("value"),
+                            "confidence": r.get("confidence", 0.0),
+                            "status": r.get("status", "empty_or_noise"),
+                        })
+
+                    save_feedback_form(
+                        form_id=f"PTA_PDF_{idx:02d}_{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{os.urandom(4).hex()}",
+                        department=req.department,
+                        class_name=req.class_name,
+                        rating_results=rating_results,
+                        comment_text=page_data.get("comments", "")
+                    )
+                except Exception as db_err:
+                    print(f"[DB ERROR] Page {idx} persistence failed: {db_err}")
 
                 json_path = os.path.join(page_dir, f"page_{idx:02d}_results.json")
                 with open(json_path, "w", encoding="utf-8") as f:

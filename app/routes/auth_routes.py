@@ -201,27 +201,21 @@ def admin_update_linked_students(user_email: str, req: AdminUpdateStudentsReques
 @router.get("/admin/settings/smtp", response_model=AdminSMTPSettings, dependencies=[Depends(require_role(["admin"]))])
 def get_smtp_settings():
     """
-    Fetch the global SMTP settings for the application.
+    Fetch the global SMTP settings for the application from the environment variables.
     """
-    config = settings_collection.find_one({"_id": "smtp_config"})
-    if not config:
-        return AdminSMTPSettings(sender_email="", app_password="")
     return AdminSMTPSettings(
-        sender_email=config.get("sender_email", ""),
-        app_password=config.get("app_password", "")
+        sender_email=os.getenv("MAIL_USERNAME", ""),
+        app_password=os.getenv("MAIL_PASSWORD", "")
     )
 
 @router.put("/admin/settings/smtp", response_model=AdminSMTPSettings, dependencies=[Depends(require_role(["admin"]))])
 def update_smtp_settings(settings: AdminSMTPSettings):
     """
-    Update the global SMTP credentials used to dispatch Teacher emails.
+    Update the global SMTP credentials.
+    Note: Since credentials are now loaded from the `.env` file, this endpoint is restricted.
+    Directly modify the .env file instead.
     """
-    settings_collection.update_one(
-        {"_id": "smtp_config"},
-        {"$set": {
-            "sender_email": settings.sender_email,
-            "app_password": settings.app_password
-        }},
-        upsert=True
+    raise HTTPException(
+        status_code=400, 
+        detail="SMTP credentials have been migrated to environment variables for security. Please manually update the .env file and restart the server."
     )
-    return settings

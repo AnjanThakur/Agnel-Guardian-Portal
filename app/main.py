@@ -1,10 +1,14 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.security_headers import SecurityHeadersMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 import mimetypes
 import os
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 # Create a custom StaticFiles to force correct Content-Type for JS modules on Windows
 class SPAStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
@@ -23,11 +27,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Apply global security headers middleware (Cyber Security Enhancement)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Use custom SPAStaticFiles for assets
 app.mount("/assets", SPAStaticFiles(directory="app/static/assets"), name="assets")

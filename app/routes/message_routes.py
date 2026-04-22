@@ -6,7 +6,6 @@ from app.core.database import db
 from app.models.message_schemas import SendMessageRequest, MessageResponse
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
-settings_collection = db["settings"]
 
 # Configure fastapimail
 # Connection details are now dynamically generated per-request to support authentic user mailboxes.
@@ -32,9 +31,8 @@ async def send_defaulter_message(
             detail=f"No parent account found linked to student ID {req.student_id}."
         )
 
-    # The user explicitly requested to receive the test emails to their own login email.
-    # We ignore the parent's email and route the email locally to the sender for verification.
-    recipient_email = current_user["email"]
+    # Route the email to the linked parent's registered email address
+    recipient_email = parent["email"]
     
     html_body = f"""
     <html>
@@ -57,24 +55,26 @@ async def send_defaulter_message(
         subtype=MessageType.html
     )
 
-    # Configure SMTP connection dynamically from the global Admin settings
-    smtp_config = settings_collection.find_one({"_id": "smtp_config"})
-    if not smtp_config or not smtp_config.get("sender_email") or not smtp_config.get("app_password"):
+    # Configure SMTP connection dynamically from environment variables
+    mail_username = os.getenv("MAIL_USERNAME")
+    mail_password = os.getenv("MAIL_PASSWORD")
+    
+    if not mail_username or not mail_password:
         raise HTTPException(
             status_code=500, 
-            detail="The Mail System has not been configured by an Administrator. Please set the SMTP credentials in the Admin Dashboard."
+            detail="Server Misconfiguration: MAIL_USERNAME and MAIL_PASSWORD are not set in the .env file."
         )
     
     dynamic_conf = ConnectionConfig(
-        MAIL_USERNAME=smtp_config["sender_email"],
-        MAIL_PASSWORD=smtp_config["app_password"],
-        MAIL_FROM=smtp_config["sender_email"],
+        MAIL_USERNAME=mail_username,
+        MAIL_PASSWORD=mail_password,
+        MAIL_FROM=mail_username,
         MAIL_PORT=587,
         MAIL_SERVER="smtp.gmail.com",
         MAIL_STARTTLS=True,
         MAIL_SSL_TLS=False,
         USE_CREDENTIALS=True,
-        VALIDATE_CERTS=True
+        VALIDATE_CERTS=False
     )
 
     # Send the email via SMTP in the background
